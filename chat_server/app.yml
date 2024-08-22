@@ -1,2 +1,12 @@
 server:
   port: 6688
+  db_url: postgres://arkeee:postgres@localhost:5432/chat
+auth:
+  sk: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VwBCIEIC2vDdmx33rd4FIG3NthtHUXoTOkoczVmnbLDFQerlDr
+    -----END PRIVATE KEY-----
+  pk: |
+    -----BEGIN PUBLIC KEY-----
+    MCowBQYDK2VwAyEAMe4mP5Gp6sAwU9bNih7/uqySPPZ5VPOyk42dFlpD7IU=
+    -----END PUBLIC KEY-----
