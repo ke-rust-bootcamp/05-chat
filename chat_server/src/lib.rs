@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod handlers;
+mod middlewares;
 mod models;
 mod utils;
 
@@ -10,6 +11,7 @@ use axum::{
     Router,
 };
 use handlers::*;
+use middlewares::set_layer;
 use sqlx::PgPool;
 use std::{fmt, ops::Deref, sync::Arc};
 use utils::{DecodingKey, EncodingKey};
@@ -59,7 +61,7 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
         .nest("/api", api)
         .with_state(state);
 
-    Ok(app)
+    Ok(set_layer(app))
 }
 
 // 当我调用 state.config => state.inner.config
