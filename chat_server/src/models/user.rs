@@ -157,7 +157,7 @@ mod tests {
     #[tokio::test]
     async fn create_duplicate_user_should_fail() -> Result<()> {
         let tdb = TestPg::new(
-            "postgres://arkeee:postgres@localhost:5432".to_string(),
+            "postgres://postgres:postgres@localhost:5432".to_string(),
             Path::new("../migrations"),
         );
         let pool = tdb.get_pool().await;
@@ -177,7 +177,7 @@ mod tests {
     #[tokio::test]
     async fn create_and_verify_user_should_work() -> Result<()> {
         let tdb = TestPg::new(
-            "postgres://arkeee:postgres@localhost:5432".to_string(),
+            "postgres://postgres:postgres@localhost:5432".to_string(),
             Path::new("../migrations"),
         );
         let pool = tdb.get_pool().await;

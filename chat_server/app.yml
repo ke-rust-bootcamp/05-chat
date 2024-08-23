@@ -1,6 +1,6 @@
 server:
   port: 6688
-  db_url: postgres://arkeee:postgres@localhost:5432/chat
+  db_url: postgres://postgres:postgres@localhost:5432/chat
 auth:
   sk: |
     -----BEGIN PRIVATE KEY-----
