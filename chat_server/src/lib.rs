@@ -7,11 +7,12 @@ mod utils;
 
 use anyhow::Context;
 use axum::{
+    middleware::from_fn_with_state,
     routing::{get, patch, post},
     Router,
 };
 use handlers::*;
-use middlewares::set_layer;
+use middlewares::{set_layer, verify_token};
 use sqlx::PgPool;
 use std::{fmt, ops::Deref, sync::Arc};
 use utils::{DecodingKey, EncodingKey};
@@ -45,8 +46,6 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
     let state = AppState::try_new(config).await?;
 
     let api = Router::new()
-        .route("/signin", post(signin_handler))
-        .route("/signup", post(signup_handler))
         .route("/chat", get(list_chat_handler).post(create_chat_handler))
         .route(
             "/chat/:id",
@@ -54,7 +53,11 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
                 .delete(delete_chat_handler)
                 .post(send_message_handler),
         )
-        .route("/chat/:id/messages", get(list_message_handler));
+        .route("/chat/:id/messages", get(list_message_handler))
+        .layer(from_fn_with_state(state.clone(), verify_token))
+        // 无需 token 即可访问
+        .route("/signin", post(signin_handler))
+        .route("/signup", post(signup_handler));
 
     let app = Router::new()
         .route("/", get(index_handler))
