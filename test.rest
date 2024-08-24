@@ -9,7 +9,7 @@ Content-Type: application/json
     "password": "123456"
 }
 
-### signin user (valid)
+### signin user (invalid)
 
 POST http://localhost:6688/api/signin
 Content-Type: application/json
@@ -19,7 +19,7 @@ Content-Type: application/json
     "password": "123456"
 }
 
-### signin user (invalid)
+### signin user (valid)
 # @name signin
 POST http://localhost:6688/api/signin
 Content-Type: application/json
@@ -33,4 +33,8 @@ Content-Type: application/json
 
 ### get chat list
 GET http://localhost:6688/api/chat
+Authorization: Bearer {{token}}
+
+### get users list
+GET http://localhost:6688/api/users
 Authorization: Bearer {{token}}

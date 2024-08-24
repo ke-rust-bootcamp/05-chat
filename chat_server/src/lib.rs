@@ -54,6 +54,7 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
                 .post(send_message_handler),
         )
         .route("/chat/:id/messages", get(list_message_handler))
+        .route("/users", get(list_chat_users_handler))
         .layer(from_fn_with_state(state.clone(), verify_token))
         // 无需 token 即可访问
         .route("/signin", post(signin_handler))
