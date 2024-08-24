@@ -49,7 +49,7 @@ mod tests {
     async fn signup_should_work() -> Result<()> {
         let config = AppConfig::load()?;
         let (_tdb, state) = AppState::new_for_test(config).await?;
-        let input = CreateUser::new("Ke Lei", "klei@foxmail.com", "postgres");
+        let input = CreateUser::new("none", "Ke Lei", "klei@foxmail.com", "postgres");
         let ret = signup_handler(State(state), Json(input))
             .await?
             .into_response();
@@ -61,41 +61,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn signin_should_work() -> Result<()> {
-        let config = AppConfig::load()?;
-        let (_tdb, state) = AppState::new_for_test(config).await?;
-        let email = "klei@foxmail.com";
-        let password = "postgres";
-        let name = "ke Lei";
-        let user = CreateUser::new(name, email, password);
-        User::create(&user, &state.pool).await?;
-        let ret = signin_handler(State(state), Json(SigninUser::new(email, password)))
-            .await
-            .into_response();
-        let status_code1 = ret.status();
-
-        assert_eq!(status_code1, StatusCode::OK);
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn signup_duplicate_user_should_409() -> Result<()> {
         let config = AppConfig::load()?;
         let (_tdb, state) = AppState::new_for_test(config).await?;
-        let email = "klei@foxmail.com";
-        let password = "postgres";
-        let name = "ke Lei";
-        let user = CreateUser::new(name, email, password);
-        signup_handler(State(state.clone()), Json(user.clone())).await?;
-        // 以下不使用 ? 操作符，防止错误发生后直接返回导致测试失败
-        let ret = signup_handler(State(state), Json(user))
+        let input = CreateUser::new("none", "Tyr Chen", "tchen@acme.org", "Hunter42");
+        signup_handler(State(state.clone()), Json(input.clone())).await?;
+        let ret = signup_handler(State(state.clone()), Json(input.clone()))
             .await
             .into_response();
         assert_eq!(ret.status(), StatusCode::CONFLICT);
         let body = ret.into_body().collect().await?.to_bytes();
-        let ret_message: ErrorOutput = serde_json::from_slice(&body)?;
-        assert_eq!(ret_message.error, "email already exists: klei@foxmail.com");
+        let ret: ErrorOutput = serde_json::from_slice(&body)?;
+
+        assert_eq!(ret.error, "email already exists: tchen@acme.org");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn signin_should_work() -> Result<()> {
+        let config = AppConfig::load()?;
+        let (_tdb, state) = AppState::new_for_test(config).await?;
+        let name = "Alice";
+        let email = "alice@acme.org";
+        let password = "Hunter42";
+        let user = CreateUser::new("none", name, email, password);
+        User::create(&user, &state.pool).await?;
+        let input = SigninUser::new(email, password);
+        let ret = signin_handler(State(state), Json(input))
+            .await?
+            .into_response();
+        assert_eq!(ret.status(), StatusCode::OK);
+        let body = ret.into_body().collect().await?.to_bytes();
+        let ret: AuthOutput = serde_json::from_slice(&body)?;
+        assert_ne!(ret.token, "");
+
         Ok(())
     }
 
@@ -103,18 +102,17 @@ mod tests {
     async fn signin_with_non_exist_user_should_403() -> Result<()> {
         let config = AppConfig::load()?;
         let (_tdb, state) = AppState::new_for_test(config).await?;
-        let email = "klei@foxmail.com";
-        let password = "postgres";
-        // let name = "ke Lei";
-        // let user = CreateUser::new(name, email, password);
-        // User::create(&user, &state.pool).await?;
-        let ret = signin_handler(State(state), Json(SigninUser::new(email, password)))
+        let email = "alice@acme.org";
+        let password = "Hunter42";
+        let input = SigninUser::new(email, password);
+        let ret = signin_handler(State(state), Json(input))
             .await
             .into_response();
         assert_eq!(ret.status(), StatusCode::FORBIDDEN);
         let body = ret.into_body().collect().await?.to_bytes();
-        let ret_message: ErrorOutput = serde_json::from_slice(&body)?;
-        assert_eq!(ret_message.error, "Invalid email or password");
+        let ret: ErrorOutput = serde_json::from_slice(&body)?;
+        assert_eq!(ret.error, "Invalid email or password");
+
         Ok(())
     }
 }
