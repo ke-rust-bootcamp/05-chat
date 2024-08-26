@@ -1,4 +1,5 @@
 mod auth;
+mod chat;
 mod request_id;
 mod server_time;
 
@@ -16,6 +17,7 @@ const REQUEST_ID_HEADER: &str = "x-request-id";
 const SERVER_TIME_HEADER: &str = "x-server-time";
 
 pub use auth::verify_token;
+pub use chat::verify_chat;
 
 pub fn set_layer(app: Router) -> Router {
     app.layer(
