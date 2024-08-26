@@ -1,48 +1,39 @@
-use crate::AppError;
-
-use super::{Chat, ChatType, ChatUser};
+use super::{Chat, ChatType};
+use crate::{AppError, AppState};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateChat {
     pub name: Option<String>,
     pub members: Vec<i64>,
     pub public: bool,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct UpdateChat {
-    pub name: Option<String>,
-    pub members: Vec<i64>,
-    pub public: bool,
-}
-
 #[allow(dead_code)]
-impl Chat {
-    pub async fn create(input: CreateChat, ws_id: u64, pool: &PgPool) -> Result<Self, AppError> {
-        // nums of chat members can not less than 2
-        let nums = input.members.len();
-        if nums < 2 {
+impl AppState {
+    pub async fn create_chat(&self, input: CreateChat, ws_id: u64) -> Result<Chat, AppError> {
+        let len = input.members.len();
+        if len < 2 {
             return Err(AppError::CreateChatError(
-                "nums of chat members can not less than 2".to_string(),
+                "Chat must have at least 2 members".to_string(),
             ));
         }
-        // if members num large than 8, chat must have a name
-        if nums > 8 && input.name.is_none() {
+
+        if len > 8 && input.name.is_none() {
             return Err(AppError::CreateChatError(
                 "Group chat with more than 8 members must have a name".to_string(),
             ));
         }
-        // check members exists
-        let users = ChatUser::fetch_by_ids(&input.members, pool).await?;
-        if users.len() != nums {
+
+        // verify if all members exist
+        let users = self.fetch_chat_user_by_ids(&input.members).await?;
+        if users.len() != len {
             return Err(AppError::CreateChatError(
                 "Some members do not exist".to_string(),
             ));
         }
 
-        let chat_type = match (&input.name, nums) {
+        let chat_type = match (&input.name, len) {
             (None, 2) => ChatType::Single,
             (None, _) => ChatType::Group,
             (Some(_), _) => {
@@ -53,7 +44,6 @@ impl Chat {
                 }
             }
         };
-
         let chat = sqlx::query_as(
             r#"
             INSERT INTO chats (ws_id, name, type, members)
@@ -64,14 +54,14 @@ impl Chat {
         .bind(ws_id as i64)
         .bind(input.name)
         .bind(chat_type)
-        .bind(&input.members)
-        .fetch_one(pool)
+        .bind(input.members)
+        .fetch_one(&self.pool)
         .await?;
 
         Ok(chat)
     }
 
-    pub async fn fetch_all(ws_id: u64, pool: &PgPool) -> Result<Vec<Self>, AppError> {
+    pub async fn fetch_chats(&self, ws_id: u64) -> Result<Vec<Chat>, AppError> {
         let chats = sqlx::query_as(
             r#"
             SELECT id, ws_id, name, type, members, created_at
@@ -80,13 +70,13 @@ impl Chat {
             "#,
         )
         .bind(ws_id as i64)
-        .fetch_all(pool)
+        .fetch_all(&self.pool)
         .await?;
 
         Ok(chats)
     }
 
-    pub async fn get_by_id(id: u64, pool: &PgPool) -> Result<Option<Self>, AppError> {
+    pub async fn get_chat_by_id(&self, id: u64) -> Result<Option<Chat>, AppError> {
         let chat = sqlx::query_as(
             r#"
             SELECT id, ws_id, name, type, members, created_at
@@ -95,68 +85,20 @@ impl Chat {
             "#,
         )
         .bind(id as i64)
-        .fetch_optional(pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(chat)
     }
+}
 
+impl Chat {
+    #[allow(dead_code)]
     pub async fn update_by_id(
-        id: i64,
-        ws_id: i64,
-        input: UpdateChat,
-        pool: &PgPool,
-    ) -> Result<Self, AppError> {
-        // 检查聊天是否存在
-        let chat_update = Chat::get_by_id(id as _, pool).await?;
-        if chat_update.is_none() {
-            return Err(AppError::UpdateChatError("Chat does not exist".to_string()));
-        };
-
-        // 准备更新的字段
-        let members = input.members;
-
-        // 如果更新了成员，检查成员是否存在
-        let users = ChatUser::fetch_by_ids(&members, pool).await?;
-        if users.len() != members.len() {
-            return Err(AppError::UpdateChatError(
-                "Some members do not exist".to_string(),
-            ));
-        }
-        let chat_type = match (&input.name, users.len()) {
-            (None, 2) => ChatType::Single,
-            (None, _) => ChatType::Group,
-            (Some(_), _) => {
-                if input.public {
-                    ChatType::PublicChannel
-                } else {
-                    ChatType::PrivateChannel
-                }
-            }
-        };
-
-        // 构建查询，根据传入的参数更新字段
-        let updated_chat = sqlx::query_as::<_, Chat>(
-            r#"
-        UPDATE chats
-        SET
-            name = COALESCE($1, name),
-            type = COALESCE($2, type),
-            members = COALESCE($3, members),
-            ws_id = COALESCE($4, ws_id)
-        WHERE id = $5
-        RETURNING id, ws_id, name, type, members, created_at
-        "#,
-        )
-        .bind(input.name)
-        .bind(chat_type)
-        .bind(members)
-        .bind(ws_id)
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
-
-        Ok(updated_chat)
+        _input: CreateChat,
+        _pool: &PgPool,
+    ) -> Result<Option<Chat>, AppError> {
+        todo!()
     }
 }
 
@@ -177,53 +119,62 @@ impl CreateChat {
 }
 
 #[cfg(test)]
-impl UpdateChat {
-    pub fn new(name: &str, members: &[i64], public: bool) -> Self {
-        // 如果 name 是一个空字符串，则不设置 name 字段
-        let name = if name.is_empty() {
-            None
-        } else {
-            Some(name.to_string())
-        };
-        Self {
-            name,
-            members: members.to_vec(),
-            public,
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
-    use crate::test_util::get_test_pool;
-
     use super::*;
+    use anyhow::Result;
 
     #[tokio::test]
-    async fn create_single_chat_should_work() {
-        let (_tdb, pool) = get_test_pool(None).await;
+    async fn create_single_chat_should_work() -> Result<()> {
+        let (_tdb, state) = AppState::new_for_test().await?;
         let input = CreateChat::new("", &[1, 2], false);
-        let chat = Chat::create(input, 1, &pool)
+        let chat = state
+            .create_chat(input, 1)
             .await
             .expect("create chat failed");
         assert_eq!(chat.ws_id, 1);
         assert_eq!(chat.members.len(), 2);
         assert_eq!(chat.r#type, ChatType::Single);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn update_single_chat_should_work() {
-        let (_tdb, pool) = get_test_pool(None).await;
-        let input = CreateChat::new("", &[1, 2], false);
-        let chat = Chat::create(input, 1, &pool)
+    async fn create_public_named_chat_should_work() -> Result<()> {
+        let (_tdb, state) = AppState::new_for_test().await?;
+        let input = CreateChat::new("general", &[1, 2, 3], true);
+        let chat = state
+            .create_chat(input, 1)
             .await
             .expect("create chat failed");
-        let input = UpdateChat::new("fps", &[1, 2, 3], true);
-        let chat = Chat::update_by_id(chat.id, 1, input, &pool)
-            .await
-            .expect("update chat failed");
         assert_eq!(chat.ws_id, 1);
         assert_eq!(chat.members.len(), 3);
         assert_eq!(chat.r#type, ChatType::PublicChannel);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn chat_get_by_id_should_work() -> Result<()> {
+        let (_tdb, state) = AppState::new_for_test().await?;
+        let chat = state
+            .get_chat_by_id(1)
+            .await
+            .expect("get chat by id failed")
+            .unwrap();
+
+        assert_eq!(chat.id, 1);
+        assert_eq!(chat.name.unwrap(), "general");
+        assert_eq!(chat.ws_id, 1);
+        assert_eq!(chat.members.len(), 5);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn chat_fetch_all_should_work() -> Result<()> {
+        let (_tdb, state) = AppState::new_for_test().await?;
+        let chats = state.fetch_chats(1).await.expect("fetch all chats failed");
+
+        assert_eq!(chats.len(), 4);
+
+        Ok(())
     }
 }

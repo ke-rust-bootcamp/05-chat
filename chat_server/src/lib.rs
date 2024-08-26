@@ -6,11 +6,6 @@ mod models;
 mod utils;
 
 use anyhow::Context;
-use axum::{
-    middleware::from_fn_with_state,
-    routing::{get, post},
-    Router,
-};
 use handlers::*;
 use middlewares::{set_layer, verify_token};
 use sqlx::PgPool;
@@ -18,21 +13,20 @@ use std::{fmt, ops::Deref, sync::Arc};
 use tokio::fs;
 use utils::{DecodingKey, EncodingKey};
 
-pub use config::AppConfig;
 pub use error::{AppError, ErrorOutput};
 pub use models::*;
+
+use axum::{
+    middleware::from_fn_with_state,
+    routing::{get, post},
+    Router,
+};
+
+pub use config::AppConfig;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
     inner: Arc<AppStateInner>,
-}
-
-impl fmt::Debug for AppStateInner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AppStateInner")
-            .field("config", &self.config)
-            .finish()
-    }
 }
 
 #[allow(unused)]
@@ -47,6 +41,7 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
     let state = AppState::try_new(config).await?;
 
     let api = Router::new()
+        .route("/users", get(list_chat_users_handler))
         .route("/chats", get(list_chat_handler).post(create_chat_handler))
         .route(
             "/chats/:id",
@@ -58,9 +53,8 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
         .route("/chats/:id/messages", get(list_message_handler))
         .route("/upload", post(upload_handler))
         .route("/files/:ws_id/*path", get(file_handler))
-        .route("/users", get(list_chat_users_handler))
         .layer(from_fn_with_state(state.clone(), verify_token))
-        // 无需 token 即可访问
+        // routes doesn't need token verification
         .route("/signin", post(signin_handler))
         .route("/signup", post(signup_handler));
 
@@ -102,6 +96,14 @@ impl AppState {
     }
 }
 
+impl fmt::Debug for AppStateInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AppStateInner")
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod test_util {
     use super::*;
@@ -109,7 +111,8 @@ mod test_util {
     use sqlx_db_tester::TestPg;
 
     impl AppState {
-        pub async fn new_for_test(config: AppConfig) -> Result<(TestPg, Self), AppError> {
+        pub async fn new_for_test() -> Result<(TestPg, Self), AppError> {
+            let config = AppConfig::load()?;
             let dk = DecodingKey::load(&config.auth.pk).context("load pk failed")?;
             let ek = EncodingKey::load(&config.auth.sk).context("load sk failed")?;
             let post = config.server.db_url.rfind('/').expect("invalid db_url");
