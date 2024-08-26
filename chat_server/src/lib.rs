@@ -15,6 +15,7 @@ use handlers::*;
 use middlewares::{set_layer, verify_token};
 use sqlx::PgPool;
 use std::{fmt, ops::Deref, sync::Arc};
+use tokio::fs;
 use utils::{DecodingKey, EncodingKey};
 
 pub use config::AppConfig;
@@ -55,6 +56,8 @@ pub async fn get_router(config: AppConfig) -> Result<Router, AppError> {
                 .post(send_message_handler),
         )
         .route("/chats/:id/messages", get(list_message_handler))
+        .route("/upload", post(upload_handler))
+        .route("/files/:ws_id/*path", get(file_handler))
         .route("/users", get(list_chat_users_handler))
         .layer(from_fn_with_state(state.clone(), verify_token))
         // 无需 token 即可访问
@@ -80,6 +83,9 @@ impl Deref for AppState {
 
 impl AppState {
     pub async fn try_new(config: AppConfig) -> Result<Self, AppError> {
+        fs::create_dir_all(&config.server.base_dir)
+            .await
+            .context("create base_dir failed")?;
         let dk = DecodingKey::load(&config.auth.pk).context("load pk failed")?;
         let ek = EncodingKey::load(&config.auth.sk).context("load sk failed")?;
         let pool = PgPool::connect(&config.server.db_url)
