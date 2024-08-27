@@ -5,7 +5,7 @@ use axum::{
     Extension, Json,
 };
 
-use crate::{AppError, AppState, Chat, CreateChat, User};
+use crate::{AppError, AppState, Chat, CreateChat, UpdateChat, User};
 
 pub(crate) async fn list_chat_handler(
     Extension(user): Extension<User>,
@@ -39,14 +39,10 @@ pub(crate) async fn get_chat_handler(
 // How to confirm whether the extension contains user information
 pub(crate) async fn update_chat_handler(
     State(state): State<AppState>,
-    Json(input): Json<CreateChat>,
-    Path(id): Path<u64>,
+    Json(input): Json<UpdateChat>,
 ) -> Result<Json<Chat>, AppError> {
-    let chat = Chat::update_by_id(input, &state.pool).await?;
-    match chat {
-        Some(chat) => Ok(Json(chat)),
-        None => Err(AppError::NotFound(format!("chat id {id}"))),
-    }
+    let chat = state.update_by_id(input).await?;
+    Ok(Json(chat))
 }
 
 // TODO: finish this as a homework

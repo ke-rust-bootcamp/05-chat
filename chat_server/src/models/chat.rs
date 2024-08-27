@@ -1,13 +1,19 @@
 use super::{Chat, ChatType};
 use crate::{AppError, AppState};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateChat {
     pub name: Option<String>,
     pub members: Vec<i64>,
     pub public: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UpdateChat {
+    pub id: i64,
+    pub name: Option<String>,
+    pub members: Option<Vec<i64>>,
 }
 #[allow(dead_code)]
 impl AppState {
@@ -48,7 +54,7 @@ impl AppState {
             r#"
             INSERT INTO chats (ws_id, name, type, members)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, ws_id, name, type, members, created_at
+            RETURNING id, ws_id, name, type, members, created_at, last_modified_at
             "#,
         )
         .bind(ws_id as i64)
@@ -64,7 +70,7 @@ impl AppState {
     pub async fn fetch_chats(&self, ws_id: u64) -> Result<Vec<Chat>, AppError> {
         let chats = sqlx::query_as(
             r#"
-            SELECT id, ws_id, name, type, members, created_at
+            SELECT *
             FROM chats
             WHERE ws_id = $1
             "#,
@@ -79,7 +85,7 @@ impl AppState {
     pub async fn get_chat_by_id(&self, id: u64) -> Result<Option<Chat>, AppError> {
         let chat = sqlx::query_as(
             r#"
-            SELECT id, ws_id, name, type, members, created_at
+            SELECT *
             FROM chats
             WHERE id = $1
             "#,
@@ -106,15 +112,22 @@ impl AppState {
 
         Ok(is_member.is_some())
     }
-}
 
-impl Chat {
-    #[allow(dead_code)]
-    pub async fn update_by_id(
-        _input: CreateChat,
-        _pool: &PgPool,
-    ) -> Result<Option<Chat>, AppError> {
-        todo!()
+    pub async fn update_by_id(&self, input: UpdateChat) -> Result<Chat, AppError> {
+        let chat = sqlx::query_as(
+            r#"
+            UPDATE chats
+            SET
+            last_modified_at = CURRENT_TIMESTAMP
+            WHERE id = $1'
+            RETURNING id, ws_id, name, type, members, created_at, last_modified_at
+            "#,
+        )
+        .bind(input.id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(chat)
     }
 }
 
