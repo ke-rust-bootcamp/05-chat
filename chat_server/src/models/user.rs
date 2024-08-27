@@ -1,9 +1,9 @@
-use super::ChatUser;
-use crate::{AppError, AppState, User};
+use crate::{AppError, AppState};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use chat_core::{ChatUser, User};
 use serde::{Deserialize, Serialize};
 use std::mem;
 
@@ -29,6 +29,17 @@ impl AppState {
             "SELECT id, ws_id, fullname, email, created_at FROM users WHERE email = $1",
         )
         .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(user)
+    }
+
+    // find a user by id
+    pub async fn find_user_by_id(&self, id: i64) -> Result<Option<User>, AppError> {
+        let user = sqlx::query_as(
+            "SELECT id, ws_id, fullname, email, created_at FROM users WHERE id = $1",
+        )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
         Ok(user)
@@ -65,7 +76,8 @@ impl AppState {
         .await?;
 
         if ws.owner_id == 0 {
-            ws.update_owner(user.id as _, &self.pool).await?;
+            self.update_workspace_owner(ws.id as _, user.id as _)
+                .await?;
         }
 
         Ok(user)
@@ -121,17 +133,6 @@ impl AppState {
         .await?;
         Ok(users)
     }
-
-    // find a user by id
-    pub async fn find_user_by_id(&self, id: i64) -> Result<Option<User>, AppError> {
-        let user = sqlx::query_as(
-            "SELECT id, ws_id, fullname, email, created_at FROM users WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(user)
-    }
 }
 
 fn hash_password(password: &str) -> Result<String, AppError> {
@@ -158,20 +159,6 @@ fn verify_password(password: &str, password_hash: &str) -> Result<bool, AppError
         .is_ok();
 
     Ok(is_valid)
-}
-
-#[cfg(test)]
-impl User {
-    pub fn new(id: i64, fullname: &str, email: &str) -> Self {
-        Self {
-            id,
-            ws_id: 0,
-            fullname: fullname.to_string(),
-            email: email.to_string(),
-            password_hash: None,
-            created_at: chrono::Utc::now(),
-        }
-    }
 }
 
 #[cfg(test)]

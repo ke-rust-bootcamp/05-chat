@@ -30,13 +30,13 @@ pub async fn verify_chat(State(state): State<AppState>, req: Request, next: Next
 
 #[cfg(test)]
 mod tests {
-    use crate::middlewares::verify_token;
 
     use super::*;
     use anyhow::Result;
     use axum::{
         body::Body, http::StatusCode, middleware::from_fn_with_state, routing::get, Router,
     };
+    use chat_core::middlewares::verify_token;
     use tower::ServiceExt;
 
     async fn handler(_req: Request) -> impl IntoResponse {
@@ -53,7 +53,7 @@ mod tests {
         let app = Router::new()
             .route("/chat/:id/messages", get(handler))
             .layer(from_fn_with_state(state.clone(), verify_chat))
-            .layer(from_fn_with_state(state.clone(), verify_token))
+            .layer(from_fn_with_state(state.clone(), verify_token::<AppState>))
             .with_state(state);
 
         // user in chat
