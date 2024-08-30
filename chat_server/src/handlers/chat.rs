@@ -8,6 +8,16 @@ use chat_core::Chat;
 
 use crate::{AppError, AppState, CreateChat, UpdateChat, User};
 
+#[utoipa::path(
+    get,
+    path = "/api/chats",
+    responses(
+        (status = 200, description = "List of chats", body = Vec<Chat>),
+    ),
+    security(
+        ("token" = [])
+    )
+)]
 pub(crate) async fn list_chat_handler(
     Extension(user): Extension<User>,
     State(state): State<AppState>,
@@ -16,6 +26,16 @@ pub(crate) async fn list_chat_handler(
     Ok((StatusCode::OK, Json(chat)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/chats",
+    responses(
+        (status = 201, description = "Chat created", body = Chat),
+    ),
+    security(
+        ("token" = [])
+    )
+)]
 pub(crate) async fn create_chat_handler(
     Extension(user): Extension<User>,
     State(state): State<AppState>,
@@ -25,7 +45,20 @@ pub(crate) async fn create_chat_handler(
     Ok((StatusCode::CREATED, Json(chat)))
 }
 
-#[allow(dead_code)]
+#[utoipa::path(
+    get,
+    path = "/api/chats/{id}",
+    params(
+        ("id" = u64, Path, description = "Chat id")
+    ),
+    responses(
+        (status = 200, description = "Chat found", body = Chat),
+        (status = 404, description = "Chat not found", body = ErrorOutput),
+    ),
+    security(
+        ("token" = [])
+    )
+)]
 pub(crate) async fn get_chat_handler(
     State(state): State<AppState>,
     Path(id): Path<u64>,

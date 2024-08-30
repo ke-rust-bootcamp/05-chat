@@ -4,7 +4,9 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Serialize, Deserialize)]
+use utoipa::ToSchema;
+
+#[derive(Debug, ToSchema, Serialize, Deserialize)]
 pub struct ErrorOutput {
     pub error: String,
 }
